@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stand up the boilerplate skeleton: Next.js 15 app with enforced core/client boundaries, zod-validated client config resolution, shadcn/ui theming via CSS variables, Vitest, CI, and a reproducible Dockerized WordPress backend with the headless GraphQL plugin stack.
+**Goal:** Stand up the boilerplate skeleton: Next.js 15 app with enforced core/client boundaries, zod-validated client config resolution, shadcn/ui theming via CSS variables, Vitest, CI, and a reproducible LocalWP WordPress backend with the headless GraphQL plugin stack.
 
-**Architecture:** Single Next.js app with `@core/*` (engine) and `@client/*` (active client, resolved from the `CLIENT` env var via a webpack alias) import boundaries enforced by ESLint. `src/client.ts` is the only bridge: it imports the active client's config and validates it with the zod schema from core. WordPress runs in Docker (`wp-env/`) provisioned by a WP-CLI script; the custom `headless-bridge` plugin folder is bind-mounted so Phase 1 can develop it live.
+**Architecture:** Single Next.js app with `@core/*` (engine) and `@client/*` (active client, resolved from the `CLIENT` env var via a webpack alias) import boundaries enforced by ESLint. `src/client.ts` is the only bridge: it imports the active client's config and validates it with the zod schema from core. WordPress runs in LocalWP (site `ecommerce-backend`), provisioned by `wp-env/setup-localwp.ps1`; the custom `headless-bridge` plugin folder is junction-linked into the site so Phase 1 can develop it live from the repo.
 
-**Tech Stack:** Next.js 15 (App Router, webpack dev — no Turbopack), React 19, TypeScript strict, Tailwind CSS, shadcn/ui, zod, Vitest (native `resolve.tsconfigPaths`), ESLint 9 (flat config), Docker Compose (WordPress 6.8 + MariaDB 11 + wp-cli), GitHub Actions.
+**Tech Stack:** Next.js 15 (App Router, webpack dev — no Turbopack), React 19, TypeScript strict, Tailwind CSS, shadcn/ui, zod, Vitest (native `resolve.tsconfigPaths`), ESLint 9 (flat config), LocalWP (WordPress + bundled PHP/WP-CLI/MySQL), GitHub Actions.
 
 **Platform notes:** Windows 11 + PowerShell. All shell commands below are PowerShell unless marked otherwise. Working directory is the repo root `E:\Ecommerce Platform` (path contains a space — keep quotes where shown). Work happens directly on `master` (fresh repo, no other collaborators).
 
@@ -769,176 +769,146 @@ git commit -m "feat: enforce core/client import boundaries via ESLint"
 
 ---
 
-### Task 8: Docker WordPress environment
+### Task 8: Local WordPress environment (LocalWP)
+
+> **Rewritten 2026-06-11:** Docker dropped per user decision ("docker lagbe na"). The dev machine already runs LocalWP (`%LOCALAPPDATA%\Programs\local\Local.exe`). The backend is a LocalWP site named `ecommerce-backend` served at `http://ecommerce-backend.local`. The Docker artifacts from the first draft of this task (commit a7c7fc0) are removed here; git history retains them if ever needed.
 
 **Files:**
-- Create: `wp-env/docker-compose.yml`, `wp-env/setup.ps1`, `wp-plugin/headless-bridge/headless-bridge.php`
-- Delete: `wp-env/.gitkeep`, `wp-plugin/headless-bridge/.gitkeep`
+- Create: `wp-env/setup-localwp.ps1`
+- Keep: `wp-plugin/headless-bridge/headless-bridge.php` (created in the Docker iteration — unchanged)
+- Delete: `wp-env/docker-compose.yml`, `wp-env/setup.ps1`
+- Modify: `src/clients/_default/client.config.ts` (WP endpoint)
 
-- [ ] **Step 1: Create `wp-env/docker-compose.yml`**
+- [ ] **Step 0 (HUMAN — LocalWP GUI): Create and start the site**
 
-```yaml
-name: ecommerce-wp
+1. Open Local → **⊕ Create a new site** → name: `ecommerce-backend`
+2. Environment: **Preferred** (PHP 8.1+, current MySQL, nginx)
+3. WordPress admin: user `admin` / password `admin` (local-only credentials)
+4. Wait for creation to finish; the site must show **Running** (green). Keep Local open — the site's MySQL only runs while the site is started.
 
-services:
-  db:
-    image: mariadb:11
-    environment:
-      MARIADB_ROOT_PASSWORD: root
-      MARIADB_DATABASE: wordpress
-      MARIADB_USER: wordpress
-      MARIADB_PASSWORD: wordpress
-    volumes:
-      - db_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-      interval: 5s
-      timeout: 5s
-      retries: 24
-
-  wordpress:
-    image: wordpress:6.8
-    depends_on:
-      db:
-        condition: service_healthy
-    ports:
-      - "8080:80"
-    environment:
-      WORDPRESS_DB_HOST: db
-      WORDPRESS_DB_USER: wordpress
-      WORDPRESS_DB_PASSWORD: wordpress
-      WORDPRESS_DB_NAME: wordpress
-    volumes:
-      - wp_data:/var/www/html
-      - ../wp-plugin/headless-bridge:/var/www/html/wp-content/plugins/headless-bridge
-
-  wpcli:
-    image: wordpress:cli
-    profiles: ["cli"]
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      WORDPRESS_DB_HOST: db
-      WORDPRESS_DB_USER: wordpress
-      WORDPRESS_DB_PASSWORD: wordpress
-      WORDPRESS_DB_NAME: wordpress
-    volumes:
-      - wp_data:/var/www/html
-      - ../wp-plugin/headless-bridge:/var/www/html/wp-content/plugins/headless-bridge
-
-volumes:
-  db_data:
-  wp_data:
-```
-
-Dev credentials are intentionally trivial — this stack is local-only and must never be exposed publicly.
-
-- [ ] **Step 2: Create the plugin skeleton** — `wp-plugin/headless-bridge/headless-bridge.php`
-
-```php
-<?php
-/**
- * Plugin Name: Headless Bridge
- * Description: Companion plugin for the headless storefront — i18n translation groups, multi-currency pricing, cache revalidation webhooks, GraphQL hardening.
- * Version: 0.1.0
- * Requires at least: 6.5
- * Requires PHP: 8.1
- */
-
-if (!defined('ABSPATH')) {
-    exit;
-}
-
-// Modules (i18n, pricing, revalidation, hardening) are registered here from Phase 1 onward.
-```
-
-- [ ] **Step 3: Create `wp-env/setup.ps1`**
+- [ ] **Step 1: Remove the Docker artifacts**
 
 ```powershell
-# Provisions the local WordPress backend. Idempotent — safe to re-run.
+Remove-Item wp-env\docker-compose.yml, wp-env\setup.ps1
+```
+
+- [ ] **Step 2: Create `wp-env/setup-localwp.ps1`**
+
+```powershell
+# Provisions the LocalWP backend site. Idempotent — safe to re-run.
+# Prereq: the site exists and is RUNNING (green) in the LocalWP GUI.
+param(
+    [string]$SiteName = "ecommerce-backend"
+)
 $ErrorActionPreference = "Stop"
-Set-Location $PSScriptRoot
 
-docker compose up -d
-
-# Wait for WordPress to respond over HTTP (any status incl. redirects counts)
-$ready = $false
-for ($i = 0; $i -lt 60; $i++) {
-    try {
-        Invoke-WebRequest -Uri "http://localhost:8080" -UseBasicParsing -TimeoutSec 5 | Out-Null
-        $ready = $true; break
-    } catch {
-        if ($_.Exception.Response) { $ready = $true; break }
-    }
-    Start-Sleep -Seconds 2
-}
-if (-not $ready) { throw "WordPress did not become reachable on http://localhost:8080" }
-
-docker compose run --rm wpcli wp core is-installed
-if ($LASTEXITCODE -ne 0) {
-    docker compose run --rm wpcli wp core install `
-        --url=http://localhost:8080 `
-        --title="Headless Store Dev" `
-        --admin_user=admin `
-        --admin_password=admin `
-        --admin_email=admin@example.com `
-        --skip-email
+$repoRoot = Split-Path $PSScriptRoot -Parent
+$siteRoot = Join-Path $env:USERPROFILE "Local Sites\$SiteName"
+$webRoot  = Join-Path $siteRoot "app\public"
+if (-not (Test-Path $webRoot)) {
+    throw "LocalWP site '$SiteName' not found at $webRoot - create it in the Local GUI first (Task 8 Step 0)."
 }
 
-docker compose run --rm wpcli wp plugin install woocommerce wp-graphql --activate
+# --- Locate LocalWP's bundled PHP (newest) and WP-CLI ---
+$lightning = Join-Path $env:LOCALAPPDATA "Programs\local\resources\extraResources\lightning-services"
+$phpExe = Get-ChildItem (Join-Path $lightning "php-*") -Directory |
+    Sort-Object Name -Descending |
+    ForEach-Object { Join-Path $_.FullName "bin\win64\php.exe" } |
+    Where-Object { Test-Path $_ } |
+    Select-Object -First 1
+if (-not $phpExe) { throw "LocalWP bundled php.exe not found under $lightning" }
 
-docker compose run --rm wpcli wp plugin install `
-    https://github.com/wp-graphql/wp-graphql-woocommerce/releases/latest/download/wp-graphql-woocommerce.zip --activate
+$wpCliDir = Join-Path $env:LOCALAPPDATA "Programs\local\resources\extraResources\bin\wp-cli"
+$wpCli = Get-ChildItem $wpCliDir -Recurse -Filter "*.phar" | Select-Object -First 1 -ExpandProperty FullName
+if (-not $wpCli) { throw "LocalWP bundled wp-cli phar not found under $wpCliDir" }
 
-# JWT auth — needed from Phase 6; soft-fail so Phase 0 stays green if the asset moves
-docker compose run --rm wpcli wp plugin install `
-    https://github.com/wp-graphql/wp-graphql-jwt-authentication/releases/latest/download/wp-graphql-jwt-authentication.zip --activate
+function Invoke-Wp {
+    & $phpExe $wpCli --path="$webRoot" @args
+    if ($LASTEXITCODE -ne 0) { throw "wp $($args -join ' ') failed (exit $LASTEXITCODE)" }
+}
+
+# --- Sanity: WP + DB reachable (site must be running in the GUI) ---
+& $phpExe $wpCli --path="$webRoot" core is-installed
 if ($LASTEXITCODE -ne 0) {
-    Write-Warning "wp-graphql-jwt-authentication install failed. Fallback (Phase 6): download the source zip from GitHub, run 'composer install --no-dev' inside the plugin folder, zip it, and install that zip."
+    throw "WordPress/DB not reachable - is the '$SiteName' site started (green) in the Local GUI?"
+}
+
+# --- Junction the companion plugin into the site (live dev from the repo) ---
+$pluginLink = Join-Path $webRoot "wp-content\plugins\headless-bridge"
+$pluginSrc  = Join-Path $repoRoot "wp-plugin\headless-bridge"
+if (-not (Test-Path $pluginLink)) {
+    New-Item -ItemType Junction -Path $pluginLink -Target $pluginSrc | Out-Null
+    Write-Host "Linked headless-bridge -> $pluginLink"
+}
+
+# --- Plugin stack ---
+Invoke-Wp plugin install woocommerce wp-graphql --activate
+Invoke-Wp plugin install https://github.com/wp-graphql/wp-graphql-woocommerce/releases/latest/download/wp-graphql-woocommerce.zip --activate
+
+# JWT auth - needed from Phase 6; soft-fail so Phase 0 stays green if the asset moves
+& $phpExe $wpCli --path="$webRoot" plugin install https://github.com/wp-graphql/wp-graphql-jwt-authentication/releases/latest/download/wp-graphql-jwt-authentication.zip --activate
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "wp-graphql-jwt-authentication install failed (needed from Phase 6 - fallback: source zip + composer install, see plan notes)."
 } else {
     $secret = -join ((1..48) | ForEach-Object { '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'[(Get-Random -Maximum 62)] })
-    docker compose run --rm wpcli wp config set GRAPHQL_JWT_AUTH_SECRET_KEY $secret --type=constant
+    & $phpExe $wpCli --path="$webRoot" config set GRAPHQL_JWT_AUTH_SECRET_KEY $secret --type=constant | Out-Null
 }
 
-docker compose run --rm wpcli wp plugin activate headless-bridge
+Invoke-Wp plugin activate headless-bridge
+Invoke-Wp option update permalink_structure "/%postname%/"
+Invoke-Wp rewrite flush
 
-docker compose run --rm wpcli wp option update permalink_structure "/%postname%/"
-docker compose run --rm wpcli wp rewrite flush --hard
-
-docker compose run --rm wpcli wp plugin list
-Write-Host "`nDone. WP admin: http://localhost:8080/wp-admin (admin/admin) | GraphQL: http://localhost:8080/graphql"
+Invoke-Wp plugin list
+Write-Host ""
+Write-Host "Done. WP admin: http://$SiteName.local/wp-admin (admin/admin) | GraphQL: http://$SiteName.local/graphql"
 ```
 
-- [ ] **Step 4: Remove the `.gitkeep` placeholders**
+Implementation notes (discovered paths may vary by LocalWP version — adapt and record):
+- If wp-cli reports a missing `mysqli` extension, pass the site's rendered php.ini explicitly: `& $phpExe -c "<siteRoot>\conf\php\php.ini" $wpCli ...` (check what actually exists under `<siteRoot>\conf\php\`).
+- `rewrite flush` without `--hard` is correct for nginx-routed LocalWP sites (no .htaccess).
+- `wp option update` on an unchanged value exits 0 — idempotency holds.
+
+- [ ] **Step 3: Run the setup**
 
 ```powershell
-Remove-Item wp-env\.gitkeep, wp-plugin\headless-bridge\.gitkeep
-```
-
-- [ ] **Step 5: Run the setup (Docker Desktop must be running)**
-
-```powershell
-powershell -ExecutionPolicy Bypass -File wp-env\setup.ps1
+powershell -ExecutionPolicy Bypass -File wp-env\setup-localwp.ps1
 ```
 
 Expected: ends with a `wp plugin list` table showing `woocommerce`, `wp-graphql`, `wp-graphql-woocommerce`, and `headless-bridge` as `active`. A warning about the JWT plugin is acceptable (soft-fail).
 
-- [ ] **Step 6: Verify the GraphQL endpoint**
+- [ ] **Step 4: Verify the GraphQL endpoint**
 
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:8080/graphql" -Method Post -ContentType "application/json" -Body '{"query":"{ generalSettings { title } products(first: 1) { nodes { id } } }"}'
+Invoke-RestMethod -Uri "http://ecommerce-backend.local/graphql" -Method Post -ContentType "application/json" -Body '{"query":"{ generalSettings { title } products(first: 1) { nodes { id } } }"}' | ConvertTo-Json -Depth 5
 ```
 
-Expected: JSON response with `data.generalSettings.title = "Headless Store Dev"` and an empty `products.nodes` array (proves WooGraphQL schema is live). No `errors` key.
+Expected: JSON with `data.generalSettings.title` set, `data.products.nodes` an empty array (WooGraphQL schema live), and no `errors` key.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 5: Point the default client at the LocalWP endpoint**
+
+In `src/clients/_default/client.config.ts`, change:
+
+```ts
+  wordpress: { endpoint: "http://ecommerce-backend.local/graphql" },
+```
+
+Then verify the frontend gates still pass:
+
+```powershell
+npm test
+npm run typecheck
+npm run lint
+npm run build
+```
+
+Expected: all green (the schema accepts any http(s) URL; no test asserts the endpoint value).
+
+- [ ] **Step 6: Commit**
 
 ```powershell
 git add -A
-git commit -m "feat: add Dockerized WordPress backend with headless GraphQL plugin stack"
+git commit -m "feat: switch WP backend to LocalWP, provision headless GraphQL plugin stack"
 ```
-
 ---
 
 ### Task 9: CI skeleton
@@ -1014,4 +984,4 @@ git commit -m "ci: add lint/typecheck/test/build workflow"
 - `npm run lint && npm run typecheck && npm test && npm run build` all green locally and in CI.
 - `npm run dev` renders the themed default storefront page.
 - Importing `@client/*` inside `src/core/**` fails lint.
-- `wp-env\setup.ps1` provisions a WordPress with WooCommerce + WPGraphQL + WooGraphQL + headless-bridge active, and `POST /graphql` answers WooGraphQL queries.
+- `wp-env\setup-localwp.ps1` provisions the LocalWP site `ecommerce-backend` with WooCommerce + WPGraphQL + WooGraphQL + headless-bridge active, and `POST http://ecommerce-backend.local/graphql` answers WooGraphQL queries.

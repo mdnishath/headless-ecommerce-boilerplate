@@ -101,10 +101,12 @@ ecommerce-platform/
 
 ### 5.1 Environment (`wp-env/`)
 
-- `docker-compose.yml`: WordPress (latest), MySQL, WP-CLI sidecar.
-- `setup.sh` (WP-CLI): installs & activates WooCommerce, WPGraphQL, WPGraphQL-WooCommerce (WooGraphQL), WPGraphQL-JWT-Authentication, and `headless-bridge`; applies hardening options; sets permalinks.
-- `seed.sh`: creates sample catalog — products in 2 languages (linked translation groups) with prices in 2 currencies, categories, a CMS page, shipping zones, tax placeholder.
-- The same recipe is the documented procedure for provisioning any new client's WP backend.
+> **Amended 2026-06-11:** Docker dropped per user decision — local backend runs on **LocalWP** (Local by Flywheel), which is already installed on the dev machine.
+
+- One LocalWP site per project (e.g. `ecommerce-backend` → `http://ecommerce-backend.local`), created/started via the LocalWP GUI.
+- `wp-env/setup-localwp.ps1`: idempotent provisioning script run after the site is created and running. It junctions `wp-plugin/headless-bridge` into the site's plugins folder (live plugin dev from the repo), uses LocalWP's bundled PHP + WP-CLI to install & activate WooCommerce, WPGraphQL, WPGraphQL-WooCommerce (WooGraphQL), and WPGraphQL-JWT-Authentication (soft-fail), sets pretty permalinks, and verifies the GraphQL endpoint.
+- Seed script (Phase 1): creates sample catalog — products in 2 languages (linked translation groups) with prices in 2 currencies, categories, a CMS page, shipping zones.
+- The same recipe is the documented procedure for provisioning any new client's local dev backend; production backends are ordinary WordPress hosting.
 
 ### 5.2 `headless-bridge` plugin (custom, part of this repo)
 
