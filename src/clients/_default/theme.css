@@ -1,0 +1,9 @@
+/*
+ * Client theme tokens. Loaded AFTER globals.css, so any token defined in
+ * globals.css :root can be overridden here. Reskinning a client = editing
+ * this file (plus logo/config). Do not add component CSS here — tokens only.
+ */
+:root {
+  --primary: oklch(0.55 0.2 260);
+  --radius: 0.5rem;
+}
