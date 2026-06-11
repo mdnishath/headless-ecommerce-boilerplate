@@ -32,6 +32,11 @@ const eslintConfig = [
               message:
                 "core must not import client code — depend on types/interfaces, or go through src/client.ts",
             },
+            {
+              group: ["@/app/*", "**/app/**"],
+              message:
+                "core must not import app routes — core is consumed by app, never the reverse",
+            },
           ],
         },
       ],
