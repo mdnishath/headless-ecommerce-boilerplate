@@ -114,6 +114,13 @@ export default nextConfig;
 CLIENT=_default
 ```
 
+Then add an exception to `.gitignore` directly below the `.env*` line (otherwise `git add -A` silently skips the file):
+
+```
+.env*
+!.env.example
+```
+
 - [ ] **Step 5: Verify**
 
 ```powershell
@@ -749,6 +756,15 @@ git commit -m "feat: add Dockerized WordPress backend with headless GraphQL plug
 
 **Files:**
 - Create: `.github/workflows/ci.yml`
+- Modify: `package.json` (strict lint)
+
+- [ ] **Step 0: Make lint strict for CI**
+
+In `package.json` scripts, change the lint script so warn-level rules fail the gate:
+
+```json
+"lint": "eslint --max-warnings 0"
+```
 
 - [ ] **Step 1: Create `.github/workflows/ci.yml`**
 
