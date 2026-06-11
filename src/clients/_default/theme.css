@@ -2,6 +2,10 @@
  * Client theme tokens. Loaded AFTER globals.css, so any token defined in
  * globals.css :root can be overridden here. Reskinning a client = editing
  * this file (plus logo/config). Do not add component CSS here — tokens only.
+ * Dark mode contract: tokens set here apply in BOTH light and dark modes
+ * (this file is emitted after globals.css's .dark block). When dark mode
+ * lands, clients must also supply a .dark { ... } block for any token
+ * that needs a mode-specific value.
  */
 :root {
   --primary: oklch(0.55 0.2 260);
