@@ -111,7 +111,7 @@ ecommerce-platform/
 Single plugin, four modules:
 
 1. **i18n module**
-   - Registers a `language` taxonomy on posts, pages, products, product variations' parents, and product categories.
+   - Registers a `language` taxonomy on posts, pages, products (variations inherit from their parent product), and product categories.
    - Translation linking via shared `_translation_group` meta (UUID). Admin metabox UI: assign language, link/unlink translations, "create translation" helper that clones a product into a new language draft.
    - WPGraphQL extensions: `language` field on nodes; `translations { language, slug, uri }` connection; `where: { language: $lang }` filter on relevant root queries; default language fallback behavior (configurable: fallback vs. exclude).
 2. **Pricing module**
@@ -160,7 +160,7 @@ interface PaymentGatewayAdapter {
 
 - Core ships `StripeAdapter` (Payment Element, multi-currency charges).
 - Client config lists enabled gateway ids + their env-var-referenced credentials; the registry filters by `supports()` for the active currency/country at checkout.
-- **Order flow:** cart review → address + shipping rate selection (WooGraphQL) → create Woo order (`pending`) → `createIntent` → customer completes payment in `PaymentUI` → gateway webhook (`/api/webhooks/[gateway]`) verifies signature and marks the Woo order paid via GraphQL/REST → confirmation page (order status polled/refetched server-side).
+- **Order flow:** cart review → address + shipping rate selection (WooGraphQL) → create Woo order (`pending`) → `createIntent` → customer completes payment in `PaymentUI` → gateway webhook (`/api/webhooks/[gateway]`) verifies signature and marks the Woo order paid via an authenticated server-to-server GraphQL mutation (application credentials) → confirmation page (order status polled/refetched server-side).
 - **Failure handling:** abandoned intents expire via gateway-side TTL; orders stuck `pending` past TTL are cancelled by a WP cron in the plugin. Webhook handlers are idempotent (event-id dedupe).
 
 ## 9. Security
@@ -180,7 +180,7 @@ interface PaymentGatewayAdapter {
 - **PPR:** available behind `experimental.ppr` flag in the boilerplate config but OFF by default.
 - **Images:** `next/image` with WP media `remotePatterns`; enforced aspect ratios (zero CLS).
 - **SEO automation:**
-  - Metadata factory in core reads Yoast or RankMark fields via GraphQL (which plugin is a client-config setting; both mapped to one internal SEO shape) with sensible fallbacks from product data.
+  - Metadata factory in core reads Yoast or RankMath fields via GraphQL (which plugin is a client-config setting; both mapped to one internal SEO shape) with sensible fallbacks from product data.
   - JSON-LD builders: `Product` (with offers in active currency), `BreadcrumbList`, `Organization`, `WebSite`.
   - `hreflang` alternates generated from translation groups.
   - Per-locale sitemaps via a sitemap index (`app/sitemap.ts`), paginated for large catalogs; `robots.ts` per environment (noindex on previews).
