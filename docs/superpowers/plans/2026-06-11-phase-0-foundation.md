@@ -672,13 +672,14 @@ export default function Home() {
 }
 ```
 
-- [ ] **Step 6: Verify visually and via build**
+- [ ] **Step 6: Verify visually, via build, and via the alias probe**
 
 ```powershell
 npm run build
+npm run verify:client-alias
 ```
 
-Expected: exit 0. Then `npm run dev`, open http://localhost:3000 — heading reads "Default Storefront", button background is the violet `--primary` from theme.css (not the neutral default). Stop the dev server.
+Expected: build exit 0; the probe now prints `OK: @client alias resolves per CLIENT env var` and exits 0 (the home page finally renders `activeClient.identity.name`, closing the loop opened in Tasks 2/5). Then `npm run dev`, open http://localhost:3000 — heading reads "Default Storefront", button background is the violet `--primary` from theme.css (not the neutral default). Stop the dev server.
 
 - [ ] **Step 7: Commit**
 
