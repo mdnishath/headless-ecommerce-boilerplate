@@ -6,7 +6,7 @@
 
 **Architecture:** Single Next.js app with `@core/*` (engine) and `@client/*` (active client, resolved from the `CLIENT` env var via a webpack alias) import boundaries enforced by ESLint. `src/client.ts` is the only bridge: it imports the active client's config and validates it with the zod schema from core. WordPress runs in Docker (`wp-env/`) provisioned by a WP-CLI script; the custom `headless-bridge` plugin folder is bind-mounted so Phase 1 can develop it live.
 
-**Tech Stack:** Next.js 15 (App Router, webpack dev — no Turbopack), React 19, TypeScript strict, Tailwind CSS, shadcn/ui, zod, Vitest + vite-tsconfig-paths, ESLint 9 (flat config), Docker Compose (WordPress 6.8 + MariaDB 11 + wp-cli), GitHub Actions.
+**Tech Stack:** Next.js 15 (App Router, webpack dev — no Turbopack), React 19, TypeScript strict, Tailwind CSS, shadcn/ui, zod, Vitest (native `resolve.tsconfigPaths`), ESLint 9 (flat config), Docker Compose (WordPress 6.8 + MariaDB 11 + wp-cli), GitHub Actions.
 
 **Platform notes:** Windows 11 + PowerShell. All shell commands below are PowerShell unless marked otherwise. Working directory is the repo root `E:\Ecommerce Platform` (path contains a space — keep quotes where shown). Work happens directly on `master` (fresh repo, no other collaborators).
 
@@ -191,17 +191,18 @@ git commit -m "feat: add core/client folder skeleton and CLIENT-resolved path al
 - [ ] **Step 1: Install dev dependencies**
 
 ```powershell
-npm install -D vitest vite-tsconfig-paths
+npm install -D vitest
 ```
 
 - [ ] **Step 2: Create `vitest.config.ts`**
 
+> **Review amendment:** originally planned with the `vite-tsconfig-paths` plugin, but Vite 8 (bundled by Vitest 4) supports tsconfig paths natively and prints a deprecation warning steering off the plugin. The native option resolved all four aliases in an empirical probe (with a negative control). It is marked `@experimental` in Vite's types — acceptable for a boilerplate; Tasks 4-5 exercise it for real.
+
 ```ts
 import { defineConfig } from "vitest/config";
-import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
-  plugins: [tsconfigPaths()],
+  resolve: { tsconfigPaths: true },
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
@@ -209,7 +210,7 @@ export default defineConfig({
 });
 ```
 
-Note: `vite-tsconfig-paths` resolves `@client/*` to `_default` in tests (same as the tsconfig mapping). Per-client test runs are out of scope for Phase 0.
+Note: tsconfig paths resolve `@client/*` to `_default` in tests (same as the tsconfig mapping). Per-client test runs are out of scope for Phase 0.
 
 - [ ] **Step 3: Add scripts to `package.json`**
 
