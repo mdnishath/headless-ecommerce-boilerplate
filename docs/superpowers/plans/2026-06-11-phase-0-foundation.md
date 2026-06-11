@@ -1001,6 +1001,14 @@ git commit -m "ci: add lint/typecheck/test/build workflow"
 
 ---
 
+## Carry-forward notes for later phases (from Phase 0 reviews)
+
+- **Phase 2:** consider restricting `src/app/**` from importing `@client/*` values (negated exception for `@client/theme.css`) so app code must consume the zod-validated `activeClient` from `src/client.ts`.
+- **Phase 8:** add a cross-client boundary rule (`src/clients/a` must not import `src/clients/b`) when the second example client lands.
+- **Known accepted bypass:** dynamic `import()` of client code from core is not caught by `no-restricted-imports` (deliberate circumvention only; `require()` is blocked by `@typescript-eslint/no-require-imports`).
+- **Glob caveat:** `**/clients/**` / `**/app/**` patterns would false-positive on npm subpaths like `aws-sdk/clients/s3` or `firebase/app/x` — if a future dep trips this, scope the pattern, don't disable the rule.
+- **CI cache note:** if CI ever caches `.next/cache` across client builds, the per-CLIENT cache namespace in next.config.ts already isolates them; the alias probe overwrites `.next` with probe output, so run it after (not before) any artifact-producing build step.
+
 ## Phase 0 Definition of Done
 
 - `npm run lint && npm run typecheck && npm test && npm run build` all green locally and in CI.
