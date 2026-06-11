@@ -40,4 +40,45 @@ describe("clientConfigSchema", () => {
       }),
     ).toThrow();
   });
+
+  it("rejects non-http(s) wordpress endpoints", () => {
+    expect(() =>
+      clientConfigSchema.parse({
+        ...valid,
+        wordpress: { endpoint: "ftp://example.com/graphql" },
+      }),
+    ).toThrow();
+  });
+
+  it("rejects lowercase currency codes", () => {
+    expect(() =>
+      clientConfigSchema.parse({
+        ...valid,
+        currencies: ["usd"],
+        defaultCurrency: "usd",
+      }),
+    ).toThrow(/ISO-4217/);
+  });
+
+  it("rejects countryCurrency keys that are not uppercase 2-letter codes", () => {
+    expect(() =>
+      clientConfigSchema.parse({ ...valid, countryCurrency: { usa: "USD" } }),
+    ).toThrow();
+  });
+
+  it("rejects countryCurrency values missing from currencies", () => {
+    expect(() =>
+      clientConfigSchema.parse({ ...valid, countryCurrency: { DE: "JPY" } }),
+    ).toThrow(/countryCurrency/);
+  });
+
+  it("rejects malformed locale codes", () => {
+    expect(() =>
+      clientConfigSchema.parse({
+        ...valid,
+        locales: ["EN!", "fr"],
+        defaultLocale: "fr",
+      }),
+    ).toThrow();
+  });
 });
