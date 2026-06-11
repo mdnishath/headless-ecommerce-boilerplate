@@ -485,15 +485,25 @@ export const clientConfig: ClientConfigInput = {
 - [ ] **Step 4: Create the resolver** — `src/client.ts`
 
 ```ts
+import { z } from "zod";
 import { clientConfigSchema, type ClientConfig } from "@core/config/schema";
 import { clientConfig as rawConfig } from "@client/client.config";
 
 /**
  * The single bridge between core and the active client.
- * `@client` resolves to src/clients/<CLIENT> at build time (next.config.ts);
- * the zod parse fails the build on an invalid config.
+ * `@client` resolves to src/clients/<CLIENT> at build time (next.config.ts).
+ * The zod parse below throws on an invalid config as soon as any module
+ * imports activeClient — wired into the app pages from Task 6 onward, and
+ * exercised for non-default clients by `npm run verify:client-alias`.
  */
-export const activeClient: ClientConfig = clientConfigSchema.parse(rawConfig);
+const result = clientConfigSchema.safeParse(rawConfig);
+if (!result.success) {
+  throw new Error(
+    `Invalid client config in src/clients/${process.env.CLIENT ?? "_default"}/client.config.ts:\n` +
+      z.prettifyError(result.error),
+  );
+}
+export const activeClient: ClientConfig = result.data;
 ```
 
 - [ ] **Step 5: Remove placeholder files**
@@ -536,6 +546,11 @@ try {
   const config = fs
     .readFileSync(configPath, "utf8")
     .replace(/name: ".*?"/, `name: "${marker}"`);
+  if (!config.includes(marker)) {
+    throw new Error(
+      "marker injection failed — regex did not match client.config.ts",
+    );
+  }
   fs.writeFileSync(configPath, config);
 
   execSync("npx next build", {
@@ -550,9 +565,15 @@ try {
   );
   // process.exit() inside try would bypass finally — use exitCode instead.
   if (!html.includes(marker)) {
-    console.error(
-      "FAIL: @client alias did not resolve to the CLIENT env var (got _default fallback)",
-    );
+    if (html.includes("Default Storefront")) {
+      console.error(
+        "FAIL: @client alias did not resolve to the CLIENT env var (got _default fallback)",
+      );
+    } else {
+      console.error(
+        "FAIL: marker not rendered — the home page does not render activeClient.identity.name (expected until Task 6)",
+      );
+    }
     process.exitCode = 1;
   } else {
     console.log("OK: @client alias resolves per CLIENT env var");
