@@ -30,13 +30,15 @@ try {
     path.join(root, ".next", "server", "app", "index.html"),
     "utf8",
   );
+  // process.exit() inside try would bypass finally — use exitCode instead.
   if (!html.includes(marker)) {
     console.error(
       "FAIL: @client alias did not resolve to the CLIENT env var (got _default fallback)",
     );
-    process.exit(1);
+    process.exitCode = 1;
+  } else {
+    console.log("OK: @client alias resolves per CLIENT env var");
   }
-  console.log("OK: @client alias resolves per CLIENT env var");
 } finally {
   fs.rmSync(probeDir, { recursive: true, force: true });
 }
