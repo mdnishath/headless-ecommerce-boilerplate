@@ -7,6 +7,6 @@ export const clientConfig: ClientConfigInput = {
   currencies: ["USD", "EUR"],
   defaultCurrency: "USD",
   countryCurrency: { US: "USD", FR: "EUR", DE: "EUR" },
-  wordpress: { endpoint: "http://localhost:8080/graphql" },
+  wordpress: { endpoint: "http://ecommerce-backend.local/graphql" },
   gateways: ["stripe"],
 };
