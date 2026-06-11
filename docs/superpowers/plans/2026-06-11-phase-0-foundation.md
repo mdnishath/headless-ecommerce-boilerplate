@@ -85,27 +85,54 @@ Note: TypeScript always type-checks `@client/*` against `_default` (the referenc
 
 - [ ] **Step 3: Wire the `CLIENT` env var into webpack in `next.config.ts`**
 
+> **Review amendment:** Next.js feeds tsconfig `paths` into webpack at enhanced-resolve's `described-resolve` stage, which outranks `resolve.alias` (`raw-resolve`). With only `resolve.alias`, the tsconfig `@client/*` mapping silently wins and every build resolves to `_default` regardless of `CLIENT` — empirically verified on Next 15.5.19. The snippet below strips the `@client/*` pattern from Next's JsConfigPathsPlugin at runtime (tsc still type-checks against `_default`), validates `CLIENT`, and fails fast on unknown clients.
+
 Replace the file contents with:
 
 ```ts
+import fs from "node:fs";
 import path from "node:path";
 import type { NextConfig } from "next";
 
 const activeClient = process.env.CLIENT ?? "_default";
 
+if (!/^[A-Za-z0-9_-]+$/.test(activeClient)) {
+  throw new Error(
+    `Invalid CLIENT "${activeClient}" — must match [A-Za-z0-9_-]+`,
+  );
+}
+const clientDir = path.resolve(process.cwd(), "src/clients", activeClient);
+if (!fs.existsSync(clientDir)) {
+  const valid = fs.readdirSync(path.resolve(process.cwd(), "src/clients"));
+  throw new Error(
+    `Unknown CLIENT "${activeClient}" — expected one of: ${valid.join(", ")}`,
+  );
+}
+
+// NOTE: the webpack() hook below is the entire white-label mechanism. It only
+// runs under webpack — do NOT switch dev/build to --turbopack without wiring
+// turbopack.resolveAlias equivalently.
 const nextConfig: NextConfig = {
   webpack: (config) => {
-    config.resolve.alias["@client"] = path.resolve(
-      process.cwd(),
-      "src/clients",
-      activeClient,
-    );
+    config.resolve.alias["@client"] = clientDir;
+    // Next feeds tsconfig "paths" into webpack at the described-resolve stage,
+    // which outranks resolve.alias (raw-resolve). Remove the @client pattern
+    // from the runtime resolver so the CLIENT-selected alias wins; tsc still
+    // type-checks @client/* against _default via tsconfig.
+    for (const plugin of config.resolve.plugins ?? []) {
+      if ((plugin as { jsConfigPlugin?: boolean })?.jsConfigPlugin) {
+        delete (plugin as unknown as { paths: Record<string, unknown> })
+          .paths["@client/*"];
+      }
+    }
     return config;
   },
 };
 
 export default nextConfig;
 ```
+
+This relies on a Next internal (`jsConfigPlugin` marker, verified present in 15.5.19); the `verify:client-alias` probe added in Task 5 is the canary that catches breakage on Next upgrades.
 
 - [ ] **Step 4: Create `.env.example`**
 
@@ -407,9 +434,72 @@ npm test
 npm run build
 ```
 
-Expected: tests PASS; build exits 0 (proves the webpack `@client` alias resolves).
+Expected: tests PASS; build exits 0. (Note: a green build does NOT prove the `@client` alias resolves per `CLIENT` — tsconfig fallback would also build green. The probe in Step 7 is the real proof.)
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: Add the alias probe script** — `scripts/verify-client-alias.mjs`
+
+This is the only check that proves the CLIENT-resolved alias actually wins over tsconfig paths (and the canary for Next-internals drift / accidental Turbopack adoption):
+
+```js
+// Builds the app with a throwaway probe client and asserts the probe's
+// marker (not _default's) reaches the rendered output. Guards the entire
+// white-label mechanism — see next.config.ts.
+import { execSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+
+const root = process.cwd();
+const probeName = "_alias_probe";
+const probeDir = path.join(root, "src", "clients", probeName);
+const defaultDir = path.join(root, "src", "clients", "_default");
+const marker = "ALIAS_PROBE_STORE_8f3a";
+
+try {
+  fs.rmSync(probeDir, { recursive: true, force: true });
+  fs.cpSync(defaultDir, probeDir, { recursive: true });
+  const configPath = path.join(probeDir, "client.config.ts");
+  const config = fs
+    .readFileSync(configPath, "utf8")
+    .replace(/name: ".*?"/, `name: "${marker}"`);
+  fs.writeFileSync(configPath, config);
+
+  execSync("npx next build", {
+    cwd: root,
+    stdio: "inherit",
+    env: { ...process.env, CLIENT: probeName },
+  });
+
+  const html = fs.readFileSync(
+    path.join(root, ".next", "server", "app", "index.html"),
+    "utf8",
+  );
+  if (!html.includes(marker)) {
+    console.error(
+      "FAIL: @client alias did not resolve to the CLIENT env var (got _default fallback)",
+    );
+    process.exit(1);
+  }
+  console.log("OK: @client alias resolves per CLIENT env var");
+} finally {
+  fs.rmSync(probeDir, { recursive: true, force: true });
+}
+```
+
+Add the npm script to `package.json`:
+
+```json
+"verify:client-alias": "node scripts/verify-client-alias.mjs"
+```
+
+- [ ] **Step 8: Run the probe**
+
+```powershell
+npm run verify:client-alias
+```
+
+Expected: ends with `OK: @client alias resolves per CLIENT env var`, exit 0.
+
+- [ ] **Step 9: Commit**
 
 ```powershell
 git add -A
@@ -792,6 +882,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - run: npm run verify:client-alias
 ```
 
 - [ ] **Step 2: Verify the same gate passes locally**
