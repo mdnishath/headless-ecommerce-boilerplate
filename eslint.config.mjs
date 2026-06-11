@@ -20,6 +20,39 @@ const eslintConfig = [
       "next-env.d.ts",
     ],
   },
+  {
+    files: ["src/core/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@client", "@client/*", "**/clients/**"],
+              message:
+                "core must not import client code — depend on types/interfaces, or go through src/client.ts",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/clients/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/app/*", "**/app/**"],
+              message: "client modules must not import app routes",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];
 
 export default eslintConfig;
