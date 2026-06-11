@@ -18,6 +18,11 @@ try {
   const config = fs
     .readFileSync(configPath, "utf8")
     .replace(/name: ".*?"/, `name: "${marker}"`);
+  if (!config.includes(marker)) {
+    throw new Error(
+      "marker injection failed — regex did not match client.config.ts",
+    );
+  }
   fs.writeFileSync(configPath, config);
 
   execSync("npx next build", {
@@ -32,9 +37,15 @@ try {
   );
   // process.exit() inside try would bypass finally — use exitCode instead.
   if (!html.includes(marker)) {
-    console.error(
-      "FAIL: @client alias did not resolve to the CLIENT env var (got _default fallback)",
-    );
+    if (html.includes("Default Storefront")) {
+      console.error(
+        "FAIL: @client alias did not resolve to the CLIENT env var (got _default fallback)",
+      );
+    } else {
+      console.error(
+        "FAIL: marker not rendered — the home page does not render activeClient.identity.name (expected until Task 6)",
+      );
+    }
     process.exitCode = 1;
   } else {
     console.log("OK: @client alias resolves per CLIENT env var");
