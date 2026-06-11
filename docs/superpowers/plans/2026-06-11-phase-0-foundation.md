@@ -115,15 +115,31 @@ if (!fs.existsSync(clientDir)) {
 const nextConfig: NextConfig = {
   webpack: (config) => {
     config.resolve.alias["@client"] = clientDir;
+    // Persistent cache must be namespaced per client, or switching CLIENT
+    // between builds reuses the previous client's cached module graph.
+    if (
+      config.cache &&
+      typeof config.cache === "object" &&
+      config.cache.type === "filesystem"
+    ) {
+      config.cache.version = `${config.cache.version ?? ""}-client-${activeClient}`;
+    }
     // Next feeds tsconfig "paths" into webpack at the described-resolve stage,
     // which outranks resolve.alias (raw-resolve). Remove the @client pattern
     // from the runtime resolver so the CLIENT-selected alias wins; tsc still
     // type-checks @client/* against _default via tsconfig.
+    let jsConfigPluginFound = false;
     for (const plugin of config.resolve.plugins ?? []) {
       if ((plugin as { jsConfigPlugin?: boolean })?.jsConfigPlugin) {
+        jsConfigPluginFound = true;
         delete (plugin as unknown as { paths: Record<string, unknown> })
           .paths["@client/*"];
       }
+    }
+    if (!jsConfigPluginFound) {
+      console.warn(
+        "next.config.ts: JsConfigPathsPlugin not found — tsconfig paths may shadow the @client alias. Run `npm run verify:client-alias` and check Next internals.",
+      );
     }
     return config;
   },
