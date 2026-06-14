@@ -29,6 +29,7 @@ class I18n
         add_action('init', [$this, 'register_taxonomy']);
         add_action('init', [$this, 'ensure_terms'], 11);
         add_action('graphql_register_types', [$this, 'register_graphql']);
+        add_filter('graphql_connection_query_args', [$this, 'filter_language_query_args'], 10, 2);
     }
 
     /** Register the non-hierarchical `language` taxonomy on supported types. */
@@ -169,5 +170,36 @@ class I18n
                 },
             ]);
         }
+
+        // Add a `language` where-arg to the post + product root connections.
+        // The exact WhereArgs input type names can be confirmed via introspection:
+        //   { __type(name:"RootQueryToPostConnectionWhereArgs"){ inputFields{ name } } }
+        foreach (['RootQueryToPostConnectionWhereArgs', 'RootQueryToProductConnectionWhereArgs'] as $where_type) {
+            register_graphql_field($where_type, 'language', [
+                'type'        => 'String',
+                'description' => 'Filter to a single language code (taxonomy slug).',
+            ]);
+        }
+    }
+
+    /**
+     * When a connection's where args include `language`, constrain the
+     * underlying WP_Query with a tax_query on the language taxonomy.
+     */
+    public function filter_language_query_args(array $query_args, $resolver): array
+    {
+        $args = method_exists($resolver, 'getArgs') ? $resolver->getArgs() : [];
+        $lang = $args['where']['language'] ?? '';
+        if (!is_string($lang) || $lang === '') {
+            return $query_args;
+        }
+        $tax_query   = $query_args['tax_query'] ?? [];
+        $tax_query[] = [
+            'taxonomy' => self::TAXONOMY,
+            'field'    => 'slug',
+            'terms'    => [$lang],
+        ];
+        $query_args['tax_query'] = $tax_query;
+        return $query_args;
     }
 }
