@@ -21,6 +21,7 @@ if (!fs.existsSync(clientDir)) {
 // runs under webpack — do NOT switch dev/build to --turbopack without wiring
 // turbopack.resolveAlias equivalently.
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["better-sqlite3"],
   webpack: (config) => {
     config.resolve.alias["@client"] = clientDir;
     // Persistent cache must be namespaced per client, or switching CLIENT
