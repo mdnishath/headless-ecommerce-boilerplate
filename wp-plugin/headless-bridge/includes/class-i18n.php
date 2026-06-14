@@ -28,6 +28,7 @@ class I18n
     {
         add_action('init', [$this, 'register_taxonomy']);
         add_action('init', [$this, 'ensure_terms'], 11);
+        add_action('graphql_register_types', [$this, 'register_graphql']);
     }
 
     /** Register the non-hierarchical `language` taxonomy on supported types. */
@@ -123,5 +124,50 @@ class I18n
             ];
         }
         return $out;
+    }
+
+    /** Register curated i18n types + fields on Product/Post/Page. */
+    public function register_graphql(): void
+    {
+        register_graphql_object_type('HBLanguage', [
+            'description' => 'A content language.',
+            'fields'      => [
+                'code' => ['type' => 'String', 'description' => 'ISO code, e.g. "en".'],
+                'name' => ['type' => 'String', 'description' => 'Display name.'],
+            ],
+        ]);
+
+        register_graphql_object_type('HBTranslation', [
+            'description' => 'A sibling translation reference.',
+            'fields'      => [
+                'language' => ['type' => 'String'],
+                'slug'     => ['type' => 'String'],
+                'uri'      => ['type' => 'String', 'description' => 'Relative permalink.'],
+            ],
+        ]);
+
+        $names = self::LANGUAGES; // code => display name
+
+        foreach (['Product', 'Post', 'Page'] as $gql_type) {
+            register_graphql_field($gql_type, 'language', [
+                'type'        => 'HBLanguage',
+                'description' => 'The content language of this node.',
+                'resolve'     => function ($source) use ($names) {
+                    $code = $this->get_language((int) $source->ID);
+                    if ($code === '') {
+                        return null;
+                    }
+                    return ['code' => $code, 'name' => $names[$code] ?? $code];
+                },
+            ]);
+
+            register_graphql_field($gql_type, 'translations', [
+                'type'        => ['list_of' => 'HBTranslation'],
+                'description' => 'Sibling translations in the same translation group.',
+                'resolve'     => function ($source) {
+                    return $this->get_translations((int) $source->ID);
+                },
+            ]);
+        }
     }
 }
