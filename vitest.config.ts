@@ -22,7 +22,11 @@ export default defineConfig({
     },
   },
   test: {
+    // Expose afterEach globally so @testing-library/react auto-registers its
+    // per-test DOM cleanup; without it, .tsx renders accumulate in the shared
+    // jsdom document and queries match across tests.
+    globals: true,
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
   },
 });
