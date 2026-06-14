@@ -101,7 +101,7 @@ class I18n
      * Sibling translations of $post_id (same group, excluding itself).
      * Returns a list of ['id','language','slug','uri'].
      */
-    public function get_translations(int $post_id): array
+    public function get_translations(int $post_id, string $status = 'any'): array
     {
         $group = get_post_meta($post_id, self::GROUP_META, true);
         if (!is_string($group) || $group === '') {
@@ -109,7 +109,7 @@ class I18n
         }
         $siblings = get_posts([
             'post_type'      => get_post_type($post_id) ?: 'any',
-            'post_status'    => 'any',
+            'post_status'    => $status,
             'posts_per_page' => -1,
             'post__not_in'   => [$post_id],
             'meta_key'       => self::GROUP_META,
@@ -169,7 +169,7 @@ class I18n
                 'type'        => ['list_of' => 'HBTranslation'],
                 'description' => 'Sibling translations in the same translation group.',
                 'resolve'     => function ($source) {
-                    return $this->get_translations((int) $source->ID);
+                    return $this->get_translations((int) $source->ID, 'publish');
                 },
             ]);
         }
@@ -193,10 +193,13 @@ class I18n
     {
         $args = method_exists($resolver, 'getArgs') ? $resolver->getArgs() : [];
         $lang = $args['where']['language'] ?? '';
-        if (!is_string($lang) || $lang === '') {
+        if (!is_string($lang) || $lang === '' || !array_key_exists($lang, self::LANGUAGES)) {
             return $query_args;
         }
-        $tax_query   = $query_args['tax_query'] ?? [];
+        $tax_query = $query_args['tax_query'] ?? [];
+        if (!empty($tax_query) && (!isset($tax_query['relation']) || $tax_query['relation'] !== 'AND')) {
+            $tax_query['relation'] = 'AND';
+        }
         $tax_query[] = [
             'taxonomy' => self::TAXONOMY,
             'field'    => 'slug',
