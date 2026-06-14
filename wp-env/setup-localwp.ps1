@@ -55,6 +55,7 @@ if ($LASTEXITCODE -ne 0) {
 } else {
     $secret = -join ((1..48) | ForEach-Object { '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'[(Get-Random -Maximum 62)] })
     & $phpExe $wpCli --path="$webRoot" config set GRAPHQL_JWT_AUTH_SECRET_KEY $secret --type=constant | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Warning "Could not write GRAPHQL_JWT_AUTH_SECRET_KEY to wp-config.php (set it manually before Phase 6)." }
 }
 
 Invoke-Wp plugin activate headless-bridge
