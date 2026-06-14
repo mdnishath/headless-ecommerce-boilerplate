@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getDefaultDoc } from "@core/studio/schema";
 
+// `unstable_cache` requires a Next request scope (incrementalCache) that doesn't
+// exist in vitest. Make it a passthrough so the cached published read runs the
+// underlying fn directly; `revalidateTag` is a no-op here.
+vi.mock("next/cache", () => ({
+  unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
+  revalidateTag: () => {},
+}));
+
 // A mutable holder the mock's `.get()` reads from, so each test can control
 // what row the (mocked) Drizzle query returns. `vi.hoisted` runs before the
 // `vi.mock` factory below, so the holder exists when the factory captures it.

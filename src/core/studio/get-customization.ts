@@ -1,38 +1,39 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
-import { customizationSchema, getDefaultDoc, type CustomizationDoc } from "@core/studio/schema";
+import { unstable_cache } from "next/cache";
+import { draftMode } from "next/headers";
+import { getDefaultDoc, type CustomizationDoc } from "@core/studio/schema";
 
-const STORE_KEY = process.env.CLIENT ?? "_default";
+/** Read a doc via the repo, tolerating any failure (DB down / missing). */
+async function readSafe(status: "published" | "draft"): Promise<CustomizationDoc> {
+  try {
+    const { readDoc } = await import("@core/studio/repo");
+    return readDoc(status) ?? getDefaultDoc();
+  } catch (err) {
+    console.error(`getCustomization(${status}) fell back to defaults:`, err);
+    return getDefaultDoc();
+  }
+}
 
-/**
- * Read the active store's customization document.
- * - 'published' is the live document; 'draft' is the in-progress edit.
- * - Falls back to registry defaults if the DB is unreachable or the row is
- *   missing/invalid, so the storefront (and CI build with no DB) never breaks.
- */
+/** Cached published read — busted by revalidateTag('customization') on publish. */
+const getPublishedCached = unstable_cache(
+  () => readSafe("published"),
+  ["studio-customization-published", process.env.CLIENT ?? "_default"],
+  { tags: ["customization"] },
+);
+
+/** Read the active store document for a mode (draft is always uncached). */
 export async function getCustomization(
   mode: "published" | "draft",
 ): Promise<CustomizationDoc> {
-  try {
-    const { db, schema } = await import("@core/db/client");
-    const row = db
-      .select()
-      .from(schema.customization)
-      .where(
-        and(
-          eq(schema.customization.storeKey, STORE_KEY),
-          eq(schema.customization.status, mode),
-        ),
-      )
-      .limit(1)
-      .get();
-    if (!row) {
-      return getDefaultDoc();
-    }
-    const parsed = customizationSchema.safeParse(JSON.parse(row.document));
-    return parsed.success ? parsed.data : getDefaultDoc();
-  } catch (err) {
-    console.error("getCustomization fell back to defaults:", err);
-    return getDefaultDoc();
-  }
+  return mode === "published" ? getPublishedCached() : readSafe("draft");
+}
+
+/**
+ * The document the storefront should render:
+ * - Draft Mode enabled (admin preview) -> the draft (uncached, fresh).
+ * - Otherwise -> the cached published document (public, fast).
+ */
+export async function getActiveCustomization(): Promise<CustomizationDoc> {
+  const { isEnabled } = await draftMode();
+  return isEnabled ? getCustomization("draft") : getCustomization("published");
 }

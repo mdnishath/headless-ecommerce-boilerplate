@@ -2,7 +2,6 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { getDefaultDoc } from "@core/studio/schema";
 
 // In-memory fake of the drizzle better-sqlite3 surface repo.ts uses.
-const store: Record<string, { document: string; version: number } | undefined> = {};
 const holder = vi.hoisted(() => ({ store: {} as Record<string, { document: string; version: number } | undefined> }));
 
 vi.mock("@core/db/client", () => {

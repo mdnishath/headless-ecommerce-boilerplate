@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "@client/theme.css";
 import { activeClient } from "@/client";
-import { getCustomization } from "@core/studio/get-customization";
+import { getActiveCustomization } from "@core/studio/get-customization";
 import { themeToCssVars } from "@core/studio/theme";
 import { Slot } from "@core/studio/slot";
 
@@ -27,7 +27,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const doc = await getCustomization("published");
+  const doc = await getActiveCustomization();
   const cssVars = themeToCssVars(doc.theme) as React.CSSProperties;
 
   return (
