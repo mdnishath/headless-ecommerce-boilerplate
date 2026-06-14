@@ -31,7 +31,9 @@ export async function verifySessionToken(
   token: string,
 ): Promise<SessionPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, secretKey());
+    const { payload } = await jwtVerify(token, secretKey(), {
+      algorithms: ["HS256"],
+    });
     if (typeof payload.sub !== "string" || typeof payload.email !== "string") {
       return null;
     }

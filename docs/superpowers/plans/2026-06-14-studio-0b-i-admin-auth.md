@@ -520,6 +520,16 @@ git commit -m "feat(studio): middleware guard for /admin + stub authenticated ad
 - `npm run lint && npm run typecheck && npm test && npm run build && npm run verify:client-alias` all green.
 - Middleware is edge-safe (jose only — no DB/bcrypt/server-only import).
 
+## Security review findings (0b-i passed — no critical vulnerabilities)
+
+- **Fixed (I-1):** `verifySessionToken` now pins `algorithms: ["HS256"]` in `jwtVerify` (jose otherwise accepts any HMAC variant the key supports — defense-in-depth).
+- **Verified clear:** cookie flags (httpOnly/secure-in-prod/sameSite=lax/path/maxAge), Server-Action CSRF protection, lazy `secretKey()` (build-safe with no SESSION_SECRET — CI), generic login error (no user enumeration via message), `server-only` boundaries, JWT tamper/expiry/alg=none rejection, no middleware path-bypass, no password/hash in logs.
+- **Backlog (acceptable for v1 single-admin; track before public/multi-tenant):**
+  - **Rate limiting / lockout** on login — none today; bcrypt(10) is the only brute-force barrier. Add before any public exposure (couples with the Phase-7 edge rate-limit work).
+  - **Timing oracle:** `verifyCredentials` skips bcrypt on unknown-user (faster response = enumeration signal). Close later with a dummy `bcrypt.compare` on the no-user path.
+  - **Prod-secret guard:** no runtime assertion that `SESSION_SECRET`/`ADMIN_PASSWORD` aren't the `.env.example` placeholder values — add a prod startup check.
+  - **jose Edge build warnings** (JWE/DecompressionStream path we never execute) — cosmetic; optionally import jose subpaths to silence.
+
 ## Carried to Studio-0b-ii / 0b-iii
 
 - **0b-ii (persistence + caching + preview):** `getDraft`/`saveDraft`/`publishDraft` server actions (admin-session-gated via `getCurrentAdmin`); wrap `getCustomization('published')` in `unstable_cache(..., { tags: ['customization'] })`; `getActiveCustomization()` = draft when an admin session/preview cookie is present, else published; wire the storefront layout/home to `getActiveCustomization`. Honor: keep the draft path uncached; anonymous `?preview=1` ignored (requires a valid admin session).
