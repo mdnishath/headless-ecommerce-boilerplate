@@ -11,4 +11,15 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Modules (i18n, pricing, revalidation, hardening) are registered here from Phase 1 onward.
+define('HEADLESS_BRIDGE_DIR', plugin_dir_path(__FILE__));
+define('HEADLESS_BRIDGE_FILE', __FILE__);
+
+require_once HEADLESS_BRIDGE_DIR . 'includes/class-i18n.php';
+
+/**
+ * Instantiate and initialise every module once WordPress + plugins are loaded.
+ * Modules (Pricing, Revalidation, Hardening) are added to this list in later phases.
+ */
+add_action('plugins_loaded', static function (): void {
+    (new \HeadlessBridge\I18n())->init();
+});
