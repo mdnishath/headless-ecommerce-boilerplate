@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" width="320" height="80">
+  <rect width="320" height="80" fill="#6d28d9"/>
+  <rect x="16" y="36" width="50" height="10" rx="2" fill="#ede9fe"/>
+  <rect x="86" y="38" width="30" height="6" rx="2" fill="#c4b5fd"/>
+  <rect x="240" y="32" width="64" height="18" rx="4" fill="#ffffff"/>
+  <text x="8" y="16" font-family="sans-serif" font-size="9" fill="#ddd6fe">Bold — CTA</text>
+</svg>
