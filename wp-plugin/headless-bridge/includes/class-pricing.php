@@ -25,6 +25,7 @@ class Pricing
         add_action('woocommerce_process_product_meta', [$this, 'save_simple_fields']);
         add_action('woocommerce_variation_options_pricing', [$this, 'render_variation_fields'], 10, 3);
         add_action('woocommerce_save_product_variation', [$this, 'save_variation_fields'], 10, 2);
+        add_action('graphql_register_types', [$this, 'register_graphql']);
     }
 
     /** Enabled ISO-4217 currency codes (uppercase). */
@@ -179,6 +180,29 @@ class Pricing
                     $this->set_price($variation_id, $cur, $kind, sanitize_text_field(wp_unslash($_POST[$field][$loop])));
                 }
             }
+        }
+    }
+
+    /** Register the HBPrice type + `prices` field on Product and ProductVariation. */
+    public function register_graphql(): void
+    {
+        register_graphql_object_type('HBPrice', [
+            'description' => 'A per-currency price.',
+            'fields'      => [
+                'currency' => ['type' => 'String', 'description' => 'ISO-4217 code.'],
+                'regular'  => ['type' => 'String', 'description' => 'Regular price, decimal string.'],
+                'sale'     => ['type' => 'String', 'description' => 'Sale price, decimal string, or empty.'],
+            ],
+        ]);
+
+        foreach (['Product', 'ProductVariation'] as $gql_type) {
+            register_graphql_field($gql_type, 'prices', [
+                'type'        => ['list_of' => 'HBPrice'],
+                'description' => 'Per-currency prices for the headless storefront.',
+                'resolve'     => function ($source) {
+                    return $this->get_prices((int) $source->ID);
+                },
+            ]);
         }
     }
 }
