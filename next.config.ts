@@ -51,6 +51,11 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
+  images: {
+    remotePatterns: [
+      { protocol: "http", hostname: "ecommerce-backend.local" },
+    ],
+  },
 };
 
 export default nextConfig;
