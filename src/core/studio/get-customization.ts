@@ -15,7 +15,7 @@ export async function getCustomization(
 ): Promise<CustomizationDoc> {
   try {
     const { db, schema } = await import("@core/db/client");
-    const rows = db
+    const row = db
       .select()
       .from(schema.customization)
       .where(
@@ -24,8 +24,8 @@ export async function getCustomization(
           eq(schema.customization.status, mode),
         ),
       )
-      .limit(1);
-    const row = Array.isArray(rows) ? rows[0] : undefined;
+      .limit(1)
+      .get();
     if (!row) {
       return getDefaultDoc();
     }

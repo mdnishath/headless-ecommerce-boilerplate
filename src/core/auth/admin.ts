@@ -11,12 +11,12 @@ export async function verifyCredentials(
 ): Promise<AdminIdentity | null> {
   try {
     const { db, schema } = await import("@core/db/client");
-    const rows = db
+    const user = db
       .select()
       .from(schema.adminUsers)
       .where(eq(schema.adminUsers.email, email.toLowerCase()))
-      .limit(1);
-    const user = Array.isArray(rows) ? rows[0] : undefined;
+      .limit(1)
+      .get();
     if (!user) {
       return null;
     }
