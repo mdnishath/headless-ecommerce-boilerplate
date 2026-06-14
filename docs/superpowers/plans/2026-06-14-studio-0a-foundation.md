@@ -966,4 +966,11 @@ git commit -m "feat(studio): render header Slot + inject theme tokens in the sto
 - **Admin auth**: `adminUsers` table exists; build login server action + signed session cookie + `/admin` middleware guard; `db:seed` to create the admin from `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
 - **Customizer UI** at `/admin`: header variant gallery (thumbnails from registry) + color pickers + auto-generated options form (zod→fields); **draft** persistence (writes the `customization` draft row); **Publish** (draft→published + `revalidateTag('customization')`).
 - **Live preview**: iframe of the storefront in preview mode reading the **draft** doc (gated to authenticated admin), debounced reload on change. Add a `getCustomization('draft')` path guarded by the admin session.
-- **Tests**: schema/registry/resolver units exist; add publish-flow + auth-guard integration and (optional) a Playlist/Playwright E2E (login → change header → publish → live reflects).
+- **Tests**: schema/registry/resolver units exist; add publish-flow + auth-guard integration and (optional) a Playwright E2E (login → change header → publish → live reflects).
+
+### Review findings carried to Studio-0b (Studio-0a passed review — no Critical/Important issues)
+
+- **Wire the remaining theme tokens** before exposing them in the admin Theme panel: `themeToCssVars` (`src/core/studio/theme.ts`) currently emits only `primary/secondary/accent/background/foreground/radius`. `colorScheme`, `fontHeading`, `fontBody`, `spacingScale` exist in `themeSchema` but are NOT emitted — so a 0b control for them would do nothing. Either wire them (fonts via the planned `next/font` allow-list; spacing via a scale var) or omit those controls in 0b. Don't ship dead controls.
+- **Add caching to the published read**: `getCustomization('published')` is currently a direct synchronous DB read. Wrap the *published* path in `unstable_cache(..., { tags: ['customization'] })` (or a tagged fetch) so Publish's `revalidateTag('customization')` works. Keep the *draft* path uncached (it reads the admin session/cookies; `unstable_cache` can't wrap `cookies()`).
+- **Optional hardening:** the `variantId.replace(\`${slot}.\`, "")` id-strip is robust for real inputs (verified) but anchor it for provable correctness: `id.startsWith(\`${slot}.\`) ? id.slice(slot.length + 1) : id` in `schema.ts` and `slot.tsx`.
+- **Build-safety is verified** under no-DB/uncreatable-path (getCustomization catches the dynamic-import eval throw and falls back) — 0b must preserve this property (don't let the admin/publish path throw at build).
