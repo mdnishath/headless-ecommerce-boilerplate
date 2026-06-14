@@ -86,14 +86,26 @@ export async function getProducts(lang = "en", first = 24): Promise<ProductCardD
 
 /** Single product by slug, or null if not found. */
 export async function getProductBySlug(slug: string): Promise<ProductDetailData | null> {
-  const data = await wpFetch<{
+  let data: {
     product:
       | (RawCard & {
           description: string | null;
           variations?: { nodes: ProductVariationData[] };
         })
       | null;
-  }>(PRODUCT_QUERY, { slug }, [`product:${slug}`]);
+  };
+  try {
+    data = await wpFetch(PRODUCT_QUERY, { slug }, [`product:${slug}`]);
+  } catch (err) {
+    // WPGraphQL signals an unknown slug via a GraphQL error (with data.product
+    // null) rather than a plain null — treat that as "not found" (→ 404),
+    // but let genuine failures (backend down, malformed query) propagate.
+    const message = err instanceof Error ? err.message : String(err);
+    if (/no product id was found|corresponding to the slug/i.test(message)) {
+      return null;
+    }
+    throw err;
+  }
 
   const p = data.product;
   if (!p) {
