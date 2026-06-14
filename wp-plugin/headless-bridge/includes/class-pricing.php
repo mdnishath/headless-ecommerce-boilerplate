@@ -21,7 +21,8 @@ class Pricing
     /** Register all hooks for this module. */
     public function init(): void
     {
-        // Hooks added by later tasks.
+        add_action('woocommerce_product_options_pricing', [$this, 'render_simple_fields']);
+        add_action('woocommerce_process_product_meta', [$this, 'save_simple_fields']);
     }
 
     /** Enabled ISO-4217 currency codes (uppercase). */
@@ -98,5 +99,47 @@ class Pricing
     {
         $present = array_column($this->get_prices($post_id), 'currency');
         return array_values(array_diff($this->get_currencies(), $present));
+    }
+
+    /** Render per-currency price inputs in the product General > Pricing group. */
+    public function render_simple_fields(): void
+    {
+        global $post;
+        if (!$post) {
+            return;
+        }
+        echo '<div class="hb-currency-prices">';
+        foreach ($this->get_currencies() as $cur) {
+            woocommerce_wp_text_input([
+                'id'          => 'hb_price_' . $cur . '_regular',
+                'label'       => sprintf('Regular price (%s)', $cur),
+                'value'       => $this->get_price((int) $post->ID, $cur, 'regular'),
+                'data_type'   => 'price',
+                'desc_tip'    => true,
+                'description' => sprintf('Headless storefront regular price in %s.', $cur),
+            ]);
+            woocommerce_wp_text_input([
+                'id'          => 'hb_price_' . $cur . '_sale',
+                'label'       => sprintf('Sale price (%s)', $cur),
+                'value'       => $this->get_price((int) $post->ID, $cur, 'sale'),
+                'data_type'   => 'price',
+                'desc_tip'    => true,
+                'description' => sprintf('Headless storefront sale price in %s.', $cur),
+            ]);
+        }
+        echo '</div>';
+    }
+
+    /** Persist the per-currency price inputs for a simple product. */
+    public function save_simple_fields(int $post_id): void
+    {
+        foreach ($this->get_currencies() as $cur) {
+            foreach (['regular', 'sale'] as $kind) {
+                $field = 'hb_price_' . $cur . '_' . $kind;
+                if (isset($_POST[$field])) {
+                    $this->set_price($post_id, $cur, $kind, sanitize_text_field(wp_unslash($_POST[$field])));
+                }
+            }
+        }
     }
 }
