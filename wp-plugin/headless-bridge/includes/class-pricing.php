@@ -53,7 +53,10 @@ class Pricing
         }
         // Accept comma or dot decimal separators; keep digits + one dot.
         $value = str_replace(',', '.', $value);
-        return is_numeric($value) ? number_format((float) $value, 2, '.', '') : '';
+        if (!is_numeric($value) || (float) $value < 0) {
+            return '';
+        }
+        return number_format((float) $value, 2, '.', '');
     }
 
     /** Store (or clear, when '') a currency price on a post/variation. */
