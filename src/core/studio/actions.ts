@@ -48,11 +48,10 @@ export async function publishDraft(): Promise<
   return result;
 }
 
-/** Enable Next Draft Mode so the admin sees the draft on the storefront. */
+/** Enable Next Draft Mode so the preview iframe renders the draft. */
 export async function enablePreview(): Promise<void> {
   await requireAdmin();
   (await draftMode()).enable();
-  redirect("/?studio=preview");
 }
 
 /** Disable Draft Mode and return to the admin. */
