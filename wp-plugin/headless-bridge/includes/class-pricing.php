@@ -204,5 +204,15 @@ class Pricing
                 },
             ]);
         }
+
+        foreach (['Product', 'ProductVariation'] as $gql_type) {
+            register_graphql_field($gql_type, 'missingCurrencies', [
+                'type'        => ['list_of' => 'String'],
+                'description' => 'Configured currencies with no explicit price (frontend applies fallback).',
+                'resolve'     => function ($source) {
+                    return $this->missing_currencies((int) $source->ID);
+                },
+            ]);
+        }
     }
 }
