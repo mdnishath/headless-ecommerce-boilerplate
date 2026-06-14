@@ -30,6 +30,9 @@ class I18n
         add_action('init', [$this, 'ensure_terms'], 11);
         add_action('graphql_register_types', [$this, 'register_graphql']);
         add_filter('graphql_connection_query_args', [$this, 'filter_language_query_args'], 10, 2);
+        add_action('add_meta_boxes', [$this, 'add_metabox']);
+        add_action('save_post', [$this, 'save_metabox'], 10, 1);
+        add_action('admin_post_hb_create_translation', [$this, 'handle_create_translation']);
     }
 
     /** Register the non-hierarchical `language` taxonomy on supported types. */
@@ -201,5 +204,123 @@ class I18n
         ];
         $query_args['tax_query'] = $tax_query;
         return $query_args;
+    }
+
+    /** Add the Language metabox to supported post types. */
+    public function add_metabox(): void
+    {
+        foreach (self::OBJECT_TYPES as $type) {
+            add_meta_box('hb-language', 'Language & Translations', [$this, 'render_metabox'], $type, 'side', 'high');
+        }
+    }
+
+    /** Render language selector + sibling list + "create translation" buttons. */
+    public function render_metabox(\WP_Post $post): void
+    {
+        wp_nonce_field('hb_language_save', 'hb_language_nonce');
+        $current = $this->get_language($post->ID);
+        echo '<p><label for="hb-language-select"><strong>Language</strong></label><br/>';
+        echo '<select name="hb_language" id="hb-language-select" style="width:100%">';
+        echo '<option value="">— none —</option>';
+        foreach (self::LANGUAGES as $code => $name) {
+            printf(
+                '<option value="%s"%s>%s</option>',
+                esc_attr($code),
+                selected($current, $code, false),
+                esc_html($name)
+            );
+        }
+        echo '</select></p>';
+
+        $siblings = $this->get_translations($post->ID);
+        echo '<p><strong>Translations</strong></p>';
+        if ($siblings) {
+            echo '<ul style="margin:0 0 8px 16px;list-style:disc">';
+            foreach ($siblings as $s) {
+                printf(
+                    '<li><a href="%s">%s</a> (%s)</li>',
+                    esc_url(get_edit_post_link((int) $s['id'])),
+                    esc_html(get_the_title((int) $s['id'])),
+                    esc_html($s['language'] ?: '—')
+                );
+            }
+            echo '</ul>';
+        } else {
+            echo '<p style="color:#777">No linked translations yet.</p>';
+        }
+
+        $present = array_map(static fn ($s) => $s['language'], $siblings);
+        if ($current !== '') {
+            $present[] = $current;
+        }
+        foreach (self::LANGUAGES as $code => $name) {
+            if (in_array($code, $present, true)) {
+                continue;
+            }
+            $url = wp_nonce_url(
+                admin_url('admin-post.php?action=hb_create_translation&source=' . $post->ID . '&lang=' . $code),
+                'hb_create_translation_' . $post->ID
+            );
+            printf('<a href="%s" class="button" style="margin-top:4px">Create %s translation</a> ', esc_url($url), esc_html($name));
+        }
+    }
+
+    /** Persist the chosen language and ensure the post has a group UUID. */
+    public function save_metabox(int $post_id): void
+    {
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+            return;
+        }
+        if (!isset($_POST['hb_language_nonce']) ||
+            !wp_verify_nonce(sanitize_text_field($_POST['hb_language_nonce']), 'hb_language_save')) {
+            return;
+        }
+        if (!current_user_can('edit_post', $post_id)) {
+            return;
+        }
+        if (in_array(get_post_type($post_id), self::OBJECT_TYPES, true)) {
+            $code = isset($_POST['hb_language']) ? sanitize_text_field($_POST['hb_language']) : '';
+            if ($code !== '') {
+                $this->set_language($post_id, $code);
+                $this->get_or_create_group($post_id);
+            }
+        }
+    }
+
+    /** Clone the source post into a new draft in the target language, same group. */
+    public function handle_create_translation(): void
+    {
+        $source = isset($_GET['source']) ? (int) $_GET['source'] : 0;
+        $lang   = isset($_GET['lang']) ? sanitize_text_field($_GET['lang']) : '';
+
+        if (!$source || !isset(self::LANGUAGES[$lang])) {
+            wp_die('Invalid translation request.');
+        }
+        check_admin_referer('hb_create_translation_' . $source);
+        if (!current_user_can('edit_post', $source)) {
+            wp_die('Insufficient permissions.');
+        }
+
+        $src = get_post($source);
+        if (!$src) {
+            wp_die('Source not found.');
+        }
+
+        $new_id = wp_insert_post([
+            'post_type'    => $src->post_type,
+            'post_status'  => 'draft',
+            'post_title'   => $src->post_title . ' (' . $lang . ')',
+            'post_content' => $src->post_content,
+            'post_excerpt' => $src->post_excerpt,
+        ]);
+        if (is_wp_error($new_id)) {
+            wp_die('Could not create translation.');
+        }
+
+        $this->set_language((int) $new_id, $lang);
+        $this->link_translation((int) $new_id, $source);
+
+        wp_safe_redirect(get_edit_post_link((int) $new_id, 'redirect'));
+        exit;
     }
 }
