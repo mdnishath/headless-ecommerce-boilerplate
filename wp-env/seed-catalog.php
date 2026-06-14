@@ -117,4 +117,82 @@ foreach ($simple as $key => $d) {
 }
 echo 'SIMPLE:' . $simple_count . "\n";
 
+/**
+ * Upsert a variable product (EN) with size variations + a simple FR clone.
+ */
+$upsert_variable = static function (
+    string $key, string $title_en, string $title_fr, string $desc_en, string $desc_fr,
+    int $cat_id, array $regular, array $sizes, array $colors
+) use ($find_seeded, $pricing, $i18n, $set_image, $upsert_simple): array {
+    $id = $find_seeded($key, 'en');
+    $product = $id ? new \WC_Product_Variable($id) : new \WC_Product_Variable();
+    $product->set_name($title_en);
+    $product->set_description($desc_en);
+    $product->set_status('publish');
+    $product->set_category_ids([$cat_id]);
+
+    $attributes = [];
+    $size_attr = new \WC_Product_Attribute();
+    $size_attr->set_name('Size');
+    $size_attr->set_options($sizes);
+    $size_attr->set_visible(true);
+    $size_attr->set_variation(true);
+    $attributes[] = $size_attr;
+    if ($colors) {
+        $color_attr = new \WC_Product_Attribute();
+        $color_attr->set_name('Color');
+        $color_attr->set_options($colors);
+        $color_attr->set_visible(true);
+        $color_attr->set_variation(false);
+        $attributes[] = $color_attr;
+    }
+    $product->set_attributes($attributes);
+    $id = (int) $product->save();
+
+    if (!get_post_meta($id, '_hb_seed_key', true)) {
+        update_post_meta($id, '_hb_seed_key', $key);
+        update_post_meta($id, '_hb_seed_lang', 'en');
+    }
+    $pricing->set_price($id, 'USD', 'regular', (string) $regular[0]);
+    $pricing->set_price($id, 'EUR', 'regular', (string) $regular[1]);
+    $i18n->set_language($id, 'en');
+    $set_image($id, $key . '-en');
+
+    $existing = [];
+    foreach ($product->get_children() as $child_id) {
+        $v = new \WC_Product_Variation($child_id);
+        $existing[$v->get_attribute('Size')] = $child_id;
+    }
+    foreach ($sizes as $size) {
+        $vid = $existing[$size] ?? 0;
+        $variation = $vid ? new \WC_Product_Variation($vid) : new \WC_Product_Variation();
+        $variation->set_parent_id($id);
+        $variation->set_attributes(['Size' => $size]);
+        $variation->set_regular_price((string) $regular[0]);
+        $vid = (int) $variation->save();
+        $pricing->set_price($vid, 'USD', 'regular', (string) $regular[0]);
+        $pricing->set_price($vid, 'EUR', 'regular', (string) $regular[1]);
+    }
+    \WC_Product_Variable::sync($id);
+    wc_delete_product_transients($id);
+
+    $fr = $upsert_simple($key, 'fr', $title_fr, $desc_fr, $cat_id, $regular, []);
+    $i18n->link_translation($fr, $id);
+
+    return [$id, $fr];
+};
+
+$variable = [
+    'classic-tee'    => ['t-shirts', 'Classic Cotton T-Shirt', 'T-Shirt en coton classique', 'Everyday cotton tee.', 'T-shirt en coton pour tous les jours.', [19.99, 18.99], ['S', 'M', 'L'], ['Black', 'White']],
+    'premium-hoodie' => ['hoodies', 'Premium Hoodie', 'Sweat à capuche premium', 'Heavyweight premium hoodie.', 'Sweat à capuche premium épais.', [49.99, 46.99], ['S', 'M', 'L'], []],
+    'slim-jeans'     => ['jeans', 'Slim Fit Jeans', 'Jean coupe slim', 'Stretch slim-fit denim.', 'Jean slim extensible.', [59.99, 55.99], ['30', '32', '34'], []],
+];
+$variable_count = 0;
+foreach ($variable as $key => $d) {
+    $cat = $cat_ids[$d[0]] ?? 0;
+    $upsert_variable($key, $d[1], $d[2], $d[3], $d[4], $cat, $d[5], $d[6], $d[7]);
+    $variable_count++;
+}
+echo 'VARIABLE:' . $variable_count . "\n";
+
 echo 'CATEGORIES:' . count(array_filter($cat_ids)) . "\n";
