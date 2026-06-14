@@ -23,6 +23,8 @@ class Pricing
     {
         add_action('woocommerce_product_options_pricing', [$this, 'render_simple_fields']);
         add_action('woocommerce_process_product_meta', [$this, 'save_simple_fields']);
+        add_action('woocommerce_variation_options_pricing', [$this, 'render_variation_fields'], 10, 3);
+        add_action('woocommerce_save_product_variation', [$this, 'save_variation_fields'], 10, 2);
     }
 
     /** Enabled ISO-4217 currency codes (uppercase). */
@@ -138,6 +140,43 @@ class Pricing
                 $field = 'hb_price_' . $cur . '_' . $kind;
                 if (isset($_POST[$field])) {
                     $this->set_price($post_id, $cur, $kind, sanitize_text_field(wp_unslash($_POST[$field])));
+                }
+            }
+        }
+    }
+
+    /** Render per-currency price inputs inside a variation's pricing row. */
+    public function render_variation_fields($loop, $variation_data, $variation): void
+    {
+        $vid = (int) $variation->ID;
+        foreach ($this->get_currencies() as $cur) {
+            woocommerce_wp_text_input([
+                'id'            => 'hb_var_price_' . $cur . '_regular_' . $loop,
+                'name'          => 'hb_var_price_' . $cur . '_regular[' . $loop . ']',
+                'label'         => sprintf('Regular (%s)', $cur),
+                'value'         => $this->get_price($vid, $cur, 'regular'),
+                'data_type'     => 'price',
+                'wrapper_class' => 'form-row form-row-first',
+            ]);
+            woocommerce_wp_text_input([
+                'id'            => 'hb_var_price_' . $cur . '_sale_' . $loop,
+                'name'          => 'hb_var_price_' . $cur . '_sale[' . $loop . ']',
+                'label'         => sprintf('Sale (%s)', $cur),
+                'value'         => $this->get_price($vid, $cur, 'sale'),
+                'data_type'     => 'price',
+                'wrapper_class' => 'form-row form-row-last',
+            ]);
+        }
+    }
+
+    /** Persist per-currency prices for a single variation row. */
+    public function save_variation_fields(int $variation_id, int $loop): void
+    {
+        foreach ($this->get_currencies() as $cur) {
+            foreach (['regular', 'sale'] as $kind) {
+                $field = 'hb_var_price_' . $cur . '_' . $kind;
+                if (isset($_POST[$field][$loop])) {
+                    $this->set_price($variation_id, $cur, $kind, sanitize_text_field(wp_unslash($_POST[$field][$loop])));
                 }
             }
         }
